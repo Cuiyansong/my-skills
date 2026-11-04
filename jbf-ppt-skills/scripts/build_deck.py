@@ -1,0 +1,96 @@
+"""CLI 入口：Markdown 大纲 → 符合 JBF 内部风格的 .pptx。
+
+用法：
+    python scripts/build_deck.py input.md -o output.pptx
+    python scripts/build_deck.py input.md -o output.pptx --template path/to/template.pptx
+    python scripts/build_deck.py input.md -o output.pptx --title "主题" --period "2026 Q4"
+
+默认模板：assets/template.pptx；缺失时回退内置默认样式。
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+
+# 允许直接运行脚本（确保能 import 同目录模块）
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from outline import parse, COVER
+from template import resolve_style, default_template_path, default_assets_dir
+from builder import build
+from validate import validate
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="生成 JBF 风格 PPT")
+    parser.add_argument("input", help="Markdown 大纲文件")
+    parser.add_argument("-o", "--output", default="output.pptx", help="输出 pptx 路径")
+    parser.add_argument("--template", default=None, help="模板 pptx 路径（默认 assets/template.pptx）")
+    parser.add_argument("--title", default=None, help="覆盖封面主标题")
+    parser.add_argument("--subtitle", default=None, help="封面一句话主旨")
+    parser.add_argument("--period", default=None, help="规划周期")
+    parser.add_argument("--presenter", default=None, help="汇报人")
+    parser.add_argument("--department", default=None, help="部门")
+    parser.add_argument("--date", default=None, help="日期")
+    args = parser.parse_args(argv)
+
+    if not os.path.exists(args.input):
+        print(f"错误：找不到输入文件 {args.input}", file=sys.stderr)
+        return 1
+
+    with open(args.input, encoding="utf-8") as f:
+        md = f.read()
+
+    deck = parse(md)
+
+    # CLI 覆盖 frontmatter
+    if args.title:
+        deck.title = args.title
+    if args.subtitle:
+        deck.subtitle = args.subtitle
+    if args.period:
+        deck.period = args.period
+    if args.presenter:
+        deck.presenter = args.presenter
+    if args.department:
+        deck.department = args.department
+    if args.date:
+        deck.date = args.date
+
+    # 封面已在 parse 阶段根据 frontmatter 自动补入（无需重复处理）
+
+    template_path = args.template or default_template_path()
+    style = resolve_style(template_path)
+    style["_assets"] = default_assets_dir()
+    style["_template"] = template_path
+
+    # 模板状态提示
+    if not os.path.exists(template_path):
+        print("⚠ 未找到模板，使用内置默认样式。", file=sys.stderr)
+
+    # 输出解析警告
+    for w in deck.warnings:
+        print(f"⚠ 大纲警告：{w}", file=sys.stderr)
+
+    warnings = build(deck, style, args.output)
+    for w in warnings:
+        print(f"⚠ 构建警告：{w}", file=sys.stderr)
+
+    # 校验
+    errors, vwarnings = validate(args.output, expected_pages=len(deck.pages))
+    for e in errors:
+        print(f"✗ 校验错误：{e}", file=sys.stderr)
+    for w in vwarnings:
+        print(f"⚠ 校验警告：{w}", file=sys.stderr)
+
+    if errors:
+        print(f"生成失败（存在校验错误）：{args.output}", file=sys.stderr)
+        return 1
+
+    print(f"✓ 已生成 {args.output}（{len(deck.pages)} 页）")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
