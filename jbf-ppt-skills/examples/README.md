@@ -3,18 +3,17 @@
 本目录包含技能的示例文件：
 
 - `sample.md` —— 示例 Markdown 大纲，源自真实的「报表平台项目规划」项目（BI 平台 Q4 规划）
-- `sample.pptx` —— 由 `sample.md` 生成的演示文稿（运行生成脚本后产生）
-- `sample-BI-platform-Q4-plan.pptx` —— 原始参考 PPT（19 页），用于提取大纲内容
+- `sample.pptx` —— 原始参考 PPT（19 页），展示目标输出样式；由 `sample.md` 生成时请输出到其他路径，避免覆盖本参考文件
 
 ## 生成示例
 
-在技能根目录执行：
+在技能根目录执行（输出到独立路径，避免覆盖参考文件 `sample.pptx`）：
 
 ```bash
-python scripts/build_deck.py examples/sample.md -o examples/sample.pptx
+python scripts/build_deck.py examples/sample.md -o examples/sample-output.pptx
 ```
 
-或直接运行自测（会生成临时产物并断言）：
+或直接运行自测（会生成临时产物并断言，不碰 examples 目录）：
 
 ```bash
 python scripts/self_test.py
