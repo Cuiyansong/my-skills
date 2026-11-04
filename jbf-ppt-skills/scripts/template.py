@@ -29,11 +29,15 @@ DEFAULT_STYLE = {
     "light_gray": "F2F5FA",       # 浅灰底：对比块
     "body_gray": "595959",        # 正文灰
     "white": "FFFFFF",
-    "deco_gray_blue": "B1BCDC",   # 章节页方块描边
-    "deco_light_blue": "D4E0FC",  # 章节页方块底
+    "deco_gray_blue": "B1BCDC",   # 结束页分隔线
+    "deco_light_blue": "D4E0FC",  # 保留（历史章节页方块底，重建中未使用）
     "dot_blue": "3660DE",         # 章节页圆点
     "purple": "982AC4",           # 封面渐变条首段
     "gradient": ["8FAADC", "5471B8", "2A4FA0", "1C3A80"],  # 封面渐变条
+    # 封面文字专用色（深色背景）
+    "cover_period": "AFE6FF",      # 封面「规划周期」浅蓝
+    "cover_subtitle": "9FB0C6",    # 封面「一句话主旨」浅灰蓝
+    "cover_meta": "9FC0E8",        # 封面「汇报人/部门/日期」浅蓝
     # 字体
     "font_name": "微软雅黑",       # 中文默认字体（新模板未显式指定，脚本默认用微软雅黑保证跨平台一致）
     "title_size": 24.0,           # pt

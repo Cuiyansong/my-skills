@@ -29,10 +29,10 @@ from template import rgb, inches, pt, image_path
 # 布局常量（英寸，相对画布左上角）
 # ---------------------------------------------------------------------------
 LAYOUT = {
-    "logo": (11.25, 0.13, 1.4, 0.44),      # 内页深蓝 logo
+    "logo": (11.25, 0.13, 1.4, 0.44),      # 内页深蓝 logo（右边缘 12.65）
     "cover_logo": (11.25, 0.48, 1.4, 0.44), # 封面白色 logo（位置略低）
-    "stock": (10.05, 0.58, 2.55, 0.23),
-    "cover_stock": (10.05, 0.98, 2.55, 0.22),  # 封面股票代码（位置略低）
+    "stock": (10.10, 0.58, 2.55, 0.23),      # 右边缘 12.65，与 logo 对齐
+    "cover_stock": (10.10, 0.98, 2.55, 0.22),  # 封面股票代码（右对齐）
     "cover_company": (8.65, 0.11, 4.4, 0.32),  # 封面顶部公司名
     "title_bar": (0.62, 1.02, 0.09, 0.5),
     "title_text": (0.91, 0.99, 9.9, 0.56),
@@ -102,7 +102,7 @@ def _add_header(slide, style, page_num=None, company_suffix=None):
     assets = style["_assets"]
     _add_picture(slide, image_path(assets, style, "logo"), *LAYOUT["logo"])
     _add_textbox(slide, *LAYOUT["stock"], [f"股票代码：{style['stock_code']}"],
-                 size=8.0, color="595959")
+                 size=8.0, color="595959", align=PP_ALIGN.RIGHT)
 
     if company_suffix:
         _add_rect(slide, *LAYOUT["footer_line"], style["primary"])
@@ -133,12 +133,12 @@ def build_cover(prs, slide, style, deck: Deck):
                  size=11.0, color="FFFFFF", align=PP_ALIGN.RIGHT)
     _add_picture(slide, image_path(assets, style, "cover_logo"), *LAYOUT["cover_logo"])
     _add_textbox(slide, *LAYOUT["cover_stock"], [f"股票代码：{style['stock_code']}"],
-                 size=8.0, color="FFFFFF")
+                 size=8.0, color="FFFFFF", align=PP_ALIGN.RIGHT)
 
-    # 主标题
+    # 主标题（白色，模板封面文字为白）
     title = deck.title or "汇报主题"
     _add_textbox(slide, 0.85, 2.25, 11.4, 1.07, [title],
-                 size=style["cover_title_size"], color=style["primary_dark"], bold=True)
+                 size=style["cover_title_size"], color="FFFFFF", bold=True)
 
     # 渐变条（紫 + 蓝序列）
     grad = [style["purple"]] + list(style["gradient"])
@@ -147,20 +147,20 @@ def build_cover(prs, slide, style, deck: Deck):
         _add_rect(slide, x, 3.52, 0.7, 0.05, c)
         x += 0.68
 
-    # 周期
+    # 周期（浅蓝，封面专用色）
     _add_textbox(slide, 0.9, 3.8, 10.9, 0.49, [deck.period or "规划周期"],
-                 size=14.0, color=style["body_gray"])
-    # 一句话主旨
+                 size=14.0, color=style["cover_period"])
+    # 一句话主旨（浅灰蓝，封面专用色）
     _add_textbox(slide, 0.9, 4.41, 7.9, 0.34, [deck.subtitle or "（此处补充一句话主旨）"],
-                 size=11.0, color=style["body_gray"])
+                 size=11.0, color=style["cover_subtitle"])
 
-    # 底部三栏：汇报人 / 部门 / 日期
+    # 底部三栏：汇报人 / 部门 / 日期（浅蓝 9FC0E8，模板色）
     for i, (label, value) in enumerate([
         ("汇报人", deck.presenter), ("部门", deck.department), ("日期", deck.date),
     ]):
         lx = 0.9 + i * 2.75
         _add_textbox(slide, lx, 6.09, 1.95, 0.28, [value or label],
-                     size=11.0, color=style["body_gray"])
+                     size=11.0, color=style["cover_meta"])
         _add_rect(slide, lx - 0.05, 6.52, 2.05, 0.0, style["primary"])
 
 
@@ -205,13 +205,11 @@ def build_section(slide, style, page: Page, page_num: int):
     _add_rect(slide, 0, 0, style["slide_width_in"], style["slide_height_in"], style["white"])
     _add_picture(slide, image_path(assets, style, "logo"), *LAYOUT["logo"])
     _add_textbox(slide, *LAYOUT["stock"], [f"股票代码：{style['stock_code']}"],
-                 size=8.0, color="595959")
+                 size=8.0, color="595959", align=PP_ALIGN.RIGHT)
     # 左侧竖条
     _add_picture(slide, image_path(assets, style, "section_bar"), 0, 0, 0.46, 7.5)
-    # 大图标（方块底 + 图标）
-    _add_rect(slide, 1.35, 1.42, 3.55, 3.55, style["deco_gray_blue"])
-    _add_rect(slide, 1.6, 1.67, 3.05, 3.05, style["deco_light_blue"])
-    _add_picture(slide, image_path(assets, style, "section_icon"), 2.0, 2.07, 2.25, 2.25)
+    # 大图标（不套框，直接放大居中展示）
+    _add_picture(slide, image_path(assets, style, "section_icon"), 1.52, 1.6, 3.2, 3.2)
     # 圆点
     for dy in (0.0, 0.62, 1.24):
         _add_rect(slide, 0.92, 1.0 + dy, 0.14, 0.14, style["dot_blue"])
@@ -245,7 +243,7 @@ def build_content(slide, style, page: Page, page_num: int, deck_title: str):
     assets = style["_assets"]
     _add_picture(slide, image_path(assets, style, "logo"), *LAYOUT["logo"])
     _add_textbox(slide, *LAYOUT["stock"], [f"股票代码：{style['stock_code']}"],
-                 size=8.0, color="595959")
+                 size=8.0, color="595959", align=PP_ALIGN.RIGHT)
 
     # 标题竖条 + 标题
     _add_rect(slide, *LAYOUT["title_bar"], style["primary"])
@@ -395,6 +393,10 @@ def _build_table(slide, style, rows, left, top, width):
         for c_i in range(n_cols):
             cell = table.cell(r_i, c_i)
             cell.text = row[c_i] if c_i < len(row) else ""
+            # 垂直居中，消除表头/内容文字上下错位
+            cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+            cell.margin_top = 0
+            cell.margin_bottom = 0
             for p in cell.text_frame.paragraphs:
                 for run in p.runs:
                     run.font.size = Pt(10.0)
@@ -411,7 +413,7 @@ def build_thanks(slide, style, deck_title: str, page_num: int):
     _add_rect(slide, 0, 0, style["slide_width_in"], style["slide_height_in"], style["white"])
     _add_picture(slide, image_path(assets, style, "logo"), *LAYOUT["logo"])
     _add_textbox(slide, *LAYOUT["stock"], [f"股票代码：{style['stock_code']}"],
-                 size=8.0, color="595959")
+                 size=8.0, color="595959", align=PP_ALIGN.RIGHT)
     # THANKS 大字
     _add_textbox(slide, 0.05, 2.24, 13.23, 1.27, ["THANKS"],
                  size=54.0, color=style["primary_dark"], bold=True, align=PP_ALIGN.CENTER)
