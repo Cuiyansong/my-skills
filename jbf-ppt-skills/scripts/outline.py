@@ -240,6 +240,22 @@ def _parse_table(lines: list[str]) -> list[list[str]]:
     return rows
 
 
+def _merge_blocks(blocks: list[Block]) -> list[Block]:
+    """合并连续的同类块（bullets / ordered / paragraph）。
+
+    解析时每个列表项、每行段落都单独成块；渲染时同类块应作为一个整体
+    文本框/列表输出，否则固定高度文本框会堆叠溢出。
+    """
+    merged: list[Block] = []
+    for b in blocks:
+        if b.kind in ("bullets", "ordered", "paragraph"):
+            if merged and merged[-1].kind == b.kind:
+                merged[-1].lines.extend(b.lines)
+                continue
+        merged.append(Block(kind=b.kind, lines=list(b.lines), rows=[list(r) for r in b.rows]))
+    return merged
+
+
 def _normalize_deck(deck: Deck) -> None:
     """清理：删除无标题且无正文的空页；删除空块；修正标题编号。"""
     kept: list[Page] = []
@@ -254,6 +270,8 @@ def _normalize_deck(deck: Deck) -> None:
             continue
         # 删除空块
         p.body = [b for b in p.body if b.lines or b.rows]
+        # 合并连续的同类块（bullets/ordered/paragraph），避免每个列表项单独成块导致溢出
+        p.body = _merge_blocks(p.body)
         kept.append(p)
     deck.pages = kept
 
