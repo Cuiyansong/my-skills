@@ -8,7 +8,7 @@
 
 | 目录 | 名称 | 说明 | 运行依赖 |
 |---|---|---|---|
-| `jbf-ppt-skills/` | JBF 大数据 PPT 设计专家 | 从 Markdown 大纲生成京北方内部风格的 PowerPoint | Python 3.8+、python-pptx |
+| `jbf-ppt-skills/` | JBF 大数据 PPT 设计专家 | 从 Markdown 大纲生成京北方内部风格的 PowerPoint | Python 3.8+、python-pptx；视觉 QA 需 LibreOffice |
 | `react-skills/` | React 前端专家 | React 组件化、状态管理、性能优化 | 无（纯指令） |
 | `backend-skills/` | 后端开发专家 | 架构设计、数据库、缓存、消息队列、微服务 | 无（纯指令） |
 | `task-planner-skills/` | Task Planner 专家 | 任务管理、日程规划、时间追踪、团队协作 | 无（纯指令） |
@@ -111,6 +111,12 @@ cd "$HOME/.agents/skills/jbf-ppt-skills"
 # 生成 PPT
 python scripts/build_deck.py examples/agentskills-intro.md -o 输出.pptx
 
+# 同时做视觉 QA（渲染图片 + 文字越界检查，需 LibreOffice）
+python scripts/build_deck.py 大纲.md -o 输出.pptx --qa
+
+# 单独跑视觉 QA
+python scripts/qa.py 输出.pptx -o qa/ --cols 4
+
 # 可选参数
 python scripts/build_deck.py 大纲.md -o 输出.pptx \
   --title "主题" --subtitle "一句话主旨" --period "2026 Q4 — 2027" \
@@ -120,6 +126,13 @@ python scripts/build_deck.py 大纲.md -o 输出.pptx \
 大纲语法见 `jbf-ppt-skills/references/PAGE_TYPES.md`，样式规范见
 `jbf-ppt-skills/references/STYLE_GUIDE.md`，示例见
 `jbf-ppt-skills/examples/`。
+
+**两层校验**：
+
+| 层 | 命令 | 检查什么 | 依赖 |
+|---|---|---|---|
+| 结构层 | 默认执行 | 页数、空页、占位符残留、shape 越界、内容丢失 | 无 |
+| 视觉层 | `--qa` 或 `qa.py` | 渲染成图 + 文字越界/压页脚 | LibreOffice、pymupdf、Pillow |
 
 ### 其他技能
 

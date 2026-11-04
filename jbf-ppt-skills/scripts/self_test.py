@@ -112,6 +112,74 @@ def main() -> int:
     check("校验无错误", len(errors) == 0, "; ".join(errors))
     check("校验无空页", "空页" not in "; ".join(errors))
 
+    # 断言 6：占位符残留能被抓出（error 级别）
+    from validate import find_placeholders
+    from pptx import Presentation
+    ph_deck = parse("---\ntitle: 占位符测试\nsubtitle: 此处补充一句话主旨\n---\n\n"
+                    "# 01 章节\n\n## 1.1 页\n\n- TODO 补充内容\n")
+    ph_file = os.path.join(tempfile.gettempdir(), "jbf_self_test_ph.pptx")
+    build(ph_deck, style, ph_file)
+    ph_hits = find_placeholders(Presentation(ph_file))
+    check("占位符残留被检测", len(ph_hits) >= 2, f"命中 {len(ph_hits)} 处")
+
+    # 断言 7：subtitle/period 为空时不再输出占位文字
+    bare = parse("---\ntitle: 无副标题\n---\n\n# 01 章节\n\n## 1.1 页\n\n- 条目\n")
+    bare_file = os.path.join(tempfile.gettempdir(), "jbf_self_test_bare.pptx")
+    build(bare, style, bare_file)
+    bare_hits = find_placeholders(Presentation(bare_file))
+    check("空 subtitle 不产生占位文字", len(bare_hits) == 0, "; ".join(bare_hits))
+
+    # 断言 8：图片加载失败不静默（记入 warnings）
+    import builder as _builder
+    from pptx.util import Inches
+    _bprs = Presentation()
+    _bprs.slide_width = Inches(13.333)
+    _bprs.slide_height = Inches(7.5)
+    _bslide = _bprs.slides.add_slide(_bprs.slide_layouts[6])
+    _builder._WARNINGS.clear()
+    _builder._add_picture(_bslide, "/nope/missing.png", 0, 0, 1, 1)
+    check("图片失败可见化", len(_builder._WARNINGS) == 1,
+          _builder._WARNINGS[0] if _builder._WARNINGS else "无警告")
+
+    # 断言 9：内容超出容量时告警不静默
+    # 构造：20 条列表（几乎占满版心）+ 段落 + 又 20 条列表 → 后两块被丢弃
+    over_lines = [f"- 列表项{i}" + "描述" * 10 for i in range(20)]
+    over_lines += ["这是中间的段落文字"]
+    over_lines += [f"- 尾列表{i}" + "描述" * 10 for i in range(20)]
+    over_md = ("---\ntitle: 超容量\n---\n\n# 01 章节\n\n## 1.1 多块\n\n"
+               + "\n".join(over_lines))
+    over_deck = parse(over_md)
+    over_file = os.path.join(tempfile.gettempdir(), "jbf_self_test_over.pptx")
+    over_warns = build(over_deck, style, over_file)
+    check("内容超出容量有告警",
+          any("未渲染" in w for w in over_warns), "; ".join(over_warns) or "无警告")
+
+    # 断言 10：视觉 QA（缺 LibreOffice 则跳过）
+    import qa as _qa
+    if _qa._soffice_bin() is None:
+        check("视觉 QA（跳过：无 LibreOffice）", True, "skipped")
+    else:
+        qa_dir = os.path.join(tempfile.gettempdir(), "jbf_self_test_qa")
+        _qa_report = _qa.run_qa(tmp, qa_dir, cols=4, dpi=80)
+        check("视觉 QA 渲染出网格图", len(_qa_report.grids) >= 1,
+              f"{len(_qa_report.grids)} 张")
+        check("视觉 QA 页面图数量正确", len(_qa_report.pages) == len(deck.pages),
+              f"{len(_qa_report.pages)} 页")
+        check("正常 deck 无视觉问题", _qa_report.ok,
+              "; ".join(i.detail for i in _qa_report.issues))
+
+        # 断言 11：视觉检查能抓出文字越界（validate.py 抓不到的那类）
+        big_deck = parse("---\ntitle: 越界\n---\n\n# 01 章节\n\n## 1.1 三十条\n\n"
+                         + "\n".join(f"- 第{i}条" + "很长的描述文字" * 8
+                                     for i in range(1, 31)))
+        big_file = os.path.join(tempfile.gettempdir(), "jbf_self_test_big.pptx")
+        build(big_deck, style, big_file)
+        big_v_errors, _ = validate(big_file)      # 结构层：不报
+        big_report = _qa.run_qa(big_file, qa_dir + "_big", cols=4, dpi=80)
+        check("越界：结构校验不报但视觉 QA 抓到",
+              len(big_v_errors) == 0 and not big_report.ok,
+              f"结构错误={len(big_v_errors)}，视觉问题={len(big_report.issues)}")
+
     # 输出结果
     passed = 0
     for name, ok, detail in results:

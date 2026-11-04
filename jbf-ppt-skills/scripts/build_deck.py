@@ -4,8 +4,10 @@
     python scripts/build_deck.py input.md -o output.pptx
     python scripts/build_deck.py input.md -o output.pptx --template path/to/template.pptx
     python scripts/build_deck.py input.md -o output.pptx --title "主题" --period "2026 Q4"
+    python scripts/build_deck.py input.md -o output.pptx --qa      # 额外跑视觉 QA
 
 默认模板：assets/template.pptx；缺失时回退内置默认样式。
+视觉 QA（--qa）需要 LibreOffice，缺则自动跳过并提示。
 """
 from __future__ import annotations
 
@@ -33,6 +35,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--presenter", default=None, help="汇报人")
     parser.add_argument("--department", default=None, help="部门")
     parser.add_argument("--date", default=None, help="日期")
+    parser.add_argument("--qa", action="store_true",
+                        help="生成后额外跑视觉 QA（渲染图片 + 文字越界检查，需 LibreOffice）")
+    parser.add_argument("--qa-dir", default=None, help="视觉 QA 输出目录（默认 <输出名>_qa/）")
     args = parser.parse_args(argv)
 
     if not os.path.exists(args.input):
@@ -77,6 +82,13 @@ def main(argv: list[str] | None = None) -> int:
     for w in warnings:
         print(f"⚠ 构建警告：{w}", file=sys.stderr)
 
+    # 内容被丢弃属于严重问题（用户内容少了），阻断交付
+    content_lost = [w for w in warnings if "未渲染" in w]
+    if content_lost:
+        print(f"\n✗ 生成失败：页面内容超出容量，部分内容未渲染。"
+              f"请精简内容或拆分为多页后重试：{args.output}", file=sys.stderr)
+        return 1
+
     # 校验
     errors, vwarnings = validate(args.output, expected_pages=len(deck.pages))
     for e in errors:
@@ -89,6 +101,28 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(f"✓ 已生成 {args.output}（{len(deck.pages)} 页）")
+
+    # 可选：视觉 QA（渲染后才可见的缺陷）
+    if args.qa:
+        out_dir = args.qa_dir or (os.path.splitext(args.output)[0] + "_qa")
+        try:
+            from qa import run_qa
+            report = run_qa(args.output, out_dir, slide_w_in=style["slide_width_in"],
+                            slide_h_in=style["slide_height_in"])
+        except (RuntimeError, FileNotFoundError) as e:
+            print(f"⚠ 视觉 QA 已跳过：{e}", file=sys.stderr)
+            return 0
+
+        print(f"视觉 QA：网格图 {len(report.grids)} 张 →")
+        for g in report.grids:
+            print(f"  {g}")
+        if report.issues:
+            print(f"\n⚠ 发现 {len(report.issues)} 处视觉问题：", file=sys.stderr)
+            for it in report.issues:
+                print(f"  ✗ 第 {it.page} 页 [{it.kind}] {it.detail}", file=sys.stderr)
+            return 1
+        print("✓ 视觉 QA 通过")
+
     return 0
 
 

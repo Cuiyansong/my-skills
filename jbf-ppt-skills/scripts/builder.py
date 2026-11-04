@@ -25,6 +25,10 @@ from outline import (
 from template import rgb, inches, pt, image_path
 
 
+# 构建过程中的警告（图片加载失败等），由 build() 返回给调用方
+_WARNINGS: list[str] = []
+
+
 # ---------------------------------------------------------------------------
 # 布局常量（英寸，相对画布左上角）
 # ---------------------------------------------------------------------------
@@ -87,13 +91,19 @@ def _add_rect(slide, left, top, width, height, fill_hex, line_hex=None):
 
 
 def _add_picture(slide, path, left, top, width, height):
-    """添加图片；path 为 None 时跳过。"""
+    """添加图片；path 为 None 时跳过。
+
+    加载失败（文件缺失、损坏、或为 python-pptx 不支持的矢量格式如 EMF/SVG）
+    不再静默吞掉——记入 warnings，避免用户看到缺 logo 却无任何提示。
+    """
     if not path:
         return None
     try:
         return slide.shapes.add_picture(path, Inches(left), Inches(top),
-                                        Inches(width), Inches(height))
-    except Exception:
+                                       Inches(width), Inches(height))
+    except Exception as e:
+        import os
+        _WARNINGS.append(f"图片加载失败（已跳过）{os.path.basename(path)}：{e}")
         return None
 
 
@@ -147,12 +157,14 @@ def build_cover(prs, slide, style, deck: Deck):
         _add_rect(slide, x, 3.52, 0.7, 0.05, c)
         x += 0.68
 
-    # 周期（浅蓝，封面专用色）
-    _add_textbox(slide, 0.9, 3.8, 10.9, 0.49, [deck.period or "规划周期"],
-                 size=14.0, color=style["cover_period"])
-    # 一句话主旨（浅灰蓝，封面专用色）
-    _add_textbox(slide, 0.9, 4.41, 7.9, 0.34, [deck.subtitle or "（此处补充一句话主旨）"],
-                 size=11.0, color=style["cover_subtitle"])
+    # 周期（浅蓝，封面专用色）：为空则不画，避免占位文字残留
+    if deck.period:
+        _add_textbox(slide, 0.9, 3.8, 10.9, 0.49, [deck.period],
+                     size=14.0, color=style["cover_period"])
+    # 一句话主旨（浅灰蓝，封面专用色）：为空则不画，避免占位文字残留
+    if deck.subtitle:
+        _add_textbox(slide, 0.9, 4.41, 7.9, 0.34, [deck.subtitle],
+                     size=11.0, color=style["cover_subtitle"])
 
     # 底部三栏：汇报人 / 部门 / 日期（浅蓝 9FC0E8，模板色）
     for i, (label, value) in enumerate([
@@ -256,7 +268,7 @@ def build_content(slide, style, page: Page, page_num: int, deck_title: str):
                      size=style["subtitle_size"], color=style["body_gray"])
 
     # 正文
-    _build_body(slide, style, page.body)
+    _build_body(slide, style, page.body, page_label=page.title or str(page_num))
 
     # 页脚 + 页码
     _add_rect(slide, *LAYOUT["footer_line"], style["primary"])
@@ -267,18 +279,22 @@ def build_content(slide, style, page: Page, page_num: int, deck_title: str):
                  size=style["footer_size"], color="595959", align=PP_ALIGN.RIGHT)
 
 
-def _build_body(slide, style, body: list[Block]):
-    """在正文区渲染各块。"""
+def _build_body(slide, style, body: list[Block], page_label: str = ""):
+    """在正文区渲染各块。超出版心的内容会被丢弃并记入 _WARNINGS。"""
     top = 2.06
     left = 0.62
     width = 12.09
     usable_h = 4.6  # 到页脚前
+    dropped: list[str] = []
 
     for block in body:
         if not block.lines and not block.rows:
             continue
         if top > 6.5:
-            break
+            # 版心已满：记录被丢弃的内容，避免静默丢内容
+            n = len(block.lines) if block.lines else len(block.rows)
+            dropped.append(f"{block.kind}×{n}")
+            continue
         if block.kind == "bullets":
             h = _build_bullets(slide, style, block.lines, left, top, width)
             top += h + 0.15
@@ -291,6 +307,13 @@ def _build_body(slide, style, body: list[Block]):
         elif block.kind == "table":
             h = _build_table(slide, style, block.rows, left, top, width)
             top += h + 0.2
+
+    if dropped:
+        where = f"「{page_label}」" if page_label else ""
+        _WARNINGS.append(
+            f"第{where}正文超出页面容量，以下内容未渲染：{', '.join(dropped)}。"
+            f"建议精简内容或拆分为多页。"
+        )
 
 
 def _estimate_lines(text: str, width_in: float, size: float) -> int:
@@ -444,6 +467,7 @@ def build_thanks(slide, style, deck_title: str, page_num: int):
 
 def build(deck: Deck, style: dict, out_path: str) -> list[str]:
     """将 Deck 渲染为 pptx 并保存。返回警告列表。"""
+    _WARNINGS.clear()
     prs = Presentation()
     prs.slide_width = Inches(style["slide_width_in"])
     prs.slide_height = Inches(style["slide_height_in"])
@@ -451,7 +475,6 @@ def build(deck: Deck, style: dict, out_path: str) -> list[str]:
     # 使用空白版式
     blank_layout = prs.slide_layouts[6] if len(prs.slide_layouts) > 6 else prs.slide_layouts[0]
 
-    warnings: list[str] = []
     page_num = 0
     deck_title = deck.title
 
@@ -472,4 +495,4 @@ def build(deck: Deck, style: dict, out_path: str) -> list[str]:
             build_content(slide, style, page, page_num, deck_title)
 
     prs.save(out_path)
-    return warnings
+    return list(_WARNINGS)
